@@ -37,13 +37,13 @@ jobs:
           make
           
       - name: Upload TrollStore .tipa
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1.3
         with:
           name: TrollDebsTrollstore.tipa
           path: ${{ github.workspace }}/build/TrollDebsTrollstore.tipa
           
       - name: Upload deb for Jailbroken devices
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1.3
         with:
           name: TrollDebs
           path: ${{ github.workspace }}/build/TrollDebs.deb
