@@ -22,9 +22,6 @@ on:
         - release
         - debug
 
-env:
-  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
-
 jobs:
   build:
     name: Build
@@ -42,72 +39,55 @@ jobs:
         echo "Setting up build environment..."
         xcode-select --install || true
         xcodebuild -version
-        brew install ldid dpkg || true
+        brew install ldid || true
 
     - name: Select Xcode version
       uses: maxim-lobanov/setup-xcode@v1
       with:
         xcode-version: '15.0.1'
 
-    - name: List directory contents
+    - name: Build for TrollStore
       run: |
-        ls -la
-        xcodebuild -list -project TrollDebs.xcodeproj || true
+        # Ensure all files are executable
+        find . -name "*.sh" -exec chmod +x {} \;
+        find . -name "*.command" -exec chmod +x {} \;
 
-    - name: Find build directory
-      id: find_build
-      run: |
-        BUILD_DIR=$(xcodebuild -project TrollDebs.xcodeproj -scheme TrollDebs -showBuildSettings 2>/dev/null | grep -m 1 "BUILD_DIR" | grep -oEi "\/.*" | xargs)
-        echo "BUILD_DIR=${BUILD_DIR}" >> $GITHUB_ENV
-        echo "BUILD_DIR=${BUILD_DIR}" >> $GITHUB_OUTPUT
-        echo "Found build directory: ${BUILD_DIR}"
-
-    - name: Build with xcodebuild
-      run: |
-        set -o pipefail
+        # Build the app with all necessary flags
         xcodebuild \
           -project "${{ github.workspace }}/TrollDebs.xcodeproj" \
           -scheme TrollDebs \
           -configuration Release \
-          -destination 'generic/platform=iOS' \
-          clean build \
-          CODE_SIGNING_ALLOWED=NO
+          -sdk iphoneos \
+          -derivedDataPath "${{ github.workspace }}/build" \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGN_ENTITLEMENTS="" \
+          CODE_SIGNING_ENTITLEMENTS=""
 
-    - name: Find built app
-      run: |
-        find "${{ env.BUILD_DIR }}" -name "*.app" -type d -print
-        APP_PATH=$(find "${{ env.BUILD_DIR }}" -name "*.app" -type d -print -quit)
-        echo "APP_PATH=${APP_PATH}" >> $GITHUB_ENV
-        echo "Found app at: ${APP_PATH}"
-
-    - name: Create .ipa file
-      if: env.APP_PATH != ''
-      run: |
+        # Create Payload directory
         mkdir -p Payload
-        cp -r "${APP_PATH}" Payload/
-        zip -r "${{ github.workspace }}/TrollDebs.ipa" Payload
-        rm -rf Payload
+        cp -r "${{ github.workspace }}/build/Build/Products/Release-iphoneos/TrollDebs.app" Payload/
 
-    - name: Upload .ipa
-      if: env.APP_PATH != ''
+        # Ensure all executables have proper permissions
+        find Payload -type f -exec chmod +x {} \;
+
+        # Copy any additional resources
+        cp -r "${{ github.workspace }}/Resources" Payload/TrollDebs.app/ || true
+        cp -r "${{ github.workspace }}/Scripts" Payload/TrollDebs.app/ || true
+
+        # Create .ipa
+        cd Payload
+        zip -r "../TrollDebs.ipa" .
+        cd ..
+
+    - name: Upload TrollStore .ipa
       uses: actions/upload-artifact@v4
       with:
-        name: TrollDebs.ipa
+        name: TrollDebs-TrollStore.ipa
         path: ${{ github.workspace }}/TrollDebs.ipa
         if-no-files-found: error
 
-    - name: Create .deb package
-      if: env.APP_PATH != ''
+    - name: Verify IPA Contents
       run: |
-        mkdir -p "${{ github.workspace }}/DEBIAN"
-        mkdir -p "${{ github.workspace }}/Applications"
-        cp -r "${APP_PATH}" "${{ github.workspace }}/Applications/TrollDebs.app"
-        dpkg-deb --build "${{ github.workspace }}" "${{ github.workspace }}/TrollDebs.deb"
-
-    - name: Upload .deb
-      if: env.APP_PATH != ''
-      uses: actions/upload-artifact@v4
-      with:
-        name: TrollDebs.deb
-        path: ${{ github.workspace }}/TrollDebs.deb
-        if-no-files-found: error
+        unzip -l "${{ github.workspace }}/TrollDebs.ipa" || true
