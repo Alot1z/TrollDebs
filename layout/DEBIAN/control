@@ -1,0 +1,8 @@
+Package: com.serena.trolldebs
+Name: TrollDebs
+Version: 1.0
+Architecture: iphoneos-arm
+Description: A utility to inject/remove debs/dylibs into TrollStore installed apps.
+Section: Applications
+Maintainer: Puyi
+Author: Puyi

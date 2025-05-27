@@ -1,0 +1,199 @@
+import SwiftUI
+
+struct PackageInjectionView: View {
+    @StateObject private var viewModel = PackageInjectionViewModel()
+    @Environment(\.presentationMode) var presentationMode
+    
+    let package: Package
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Form {
+                    Section(header: Text("Package to Inject")) {
+                        HStack {
+                            Image(systemName: "shippingbox.fill")
+                                .font(.title2)
+                                .foregroundColor(.accentColor)
+                                .frame(width: 40, height: 40)
+                                .background(Color.accentColor.opacity(0.1))
+                                .cornerRadius(8)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(package.displayName)
+                                    .font(.headline)
+                                Text(package.identifier)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    
+                    Section(header: Text("Target App")) {
+                        if viewModel.installedApps.isEmpty {
+                            if viewModel.isLoading {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                    Spacer()
+                                }
+                            } else {
+                                Text("No apps found")
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Picker("Select App", selection: $viewModel.selectedApp) {
+                                ForEach(viewModel.installedApps) { app in
+                                    AppRow(app: app)
+                                        .tag(app as PackageInjectionViewModel.InstalledApp?)
+                                }
+                            }
+                            .pickerStyle(DefaultPickerStyle())
+                        }
+                    }
+                    
+                    Section {
+                        Button(action: injectPackage) {
+                            HStack {
+                                Spacer()
+                                if viewModel.isLoading {
+                                    ProgressView()
+                                        .padding(.trailing, 8)
+                                    Text("Injecting...")
+                                } else {
+                                    Image(systemName: "arrow.up.bin")
+                                    Text("Inject Package")
+                                }
+                                Spacer()
+                            }
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                        }
+                        .disabled(viewModel.selectedApp == nil || viewModel.isLoading)
+                        
+                        if package.isInjected {
+                            Button(role: .destructive, action: deinjectPackage) {
+                                HStack {
+                                    Spacer()
+                                    Image(systemName: "arrow.uturn.backward")
+                                    Text("Deinject Package")
+                                    Spacer()
+                                }
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.red)
+                                .cornerRadius(10)
+                            }
+                            .disabled(viewModel.selectedApp == nil || viewModel.isLoading)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                }
+                .navigationTitle("Inject Package")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    }
+                }
+                .alert("Error", isPresented: $viewModel.showError) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(viewModel.error?.localizedDescription ?? "An unknown error occurred")
+                }
+                .alert("Success", isPresented: $viewModel.showSuccess) {
+                    Button("OK", role: .cancel) {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                } message: {
+                    Text(viewModel.successMessage)
+                }
+                .onAppear {
+                    viewModel.loadInstalledApps()
+                }
+                
+                if viewModel.isLoading && viewModel.installedApps.isEmpty {
+                    Color.black.opacity(0.3)
+                        .edgesIgnoringSafeArea(.all)
+                        .overlay(
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                Text("Loading apps...")
+                                    .font(.headline)
+                            }
+                            .padding(24)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(12)
+                            .shadow(radius: 10)
+                        )
+                }
+            }
+        }
+    }
+    
+    private func injectPackage() {
+        guard let debPath = package.filename else { return }
+        viewModel.injectDeb(debPath) { success in
+            // Handle completion if needed
+        }
+    }
+    
+    private func deinjectPackage() {
+        viewModel.deinject(packageId: package.identifier) { success in
+            // Handle completion if needed
+        }
+    }
+}
+
+struct AppRow: View {
+    let app: PackageInjectionViewModel.InstalledApp
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            if let icon = app.icon {
+                Image(uiImage: icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 40)
+                    .cornerRadius(8)
+            } else {
+                Image(systemName: "app")
+                    .font(.title2)
+                    .frame(width: 40, height: 40)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(8)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.name)
+                    .font(.headline)
+                Text(app.bundleId)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Preview
+
+struct PackageInjectionView_Previews: PreviewProvider {
+    static var previews: some View {
+        PackageInjectionView(package: .samplePackages[0])
+    }
+}
