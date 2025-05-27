@@ -50,7 +50,17 @@ jobs:
         xcode-version: '15.0.1'
 
     - name: List directory contents
-      run: ls -la
+      run: |
+        ls -la
+        xcodebuild -list -project TrollDebs.xcodeproj || true
+
+    - name: Find build directory
+      id: find_build
+      run: |
+        BUILD_DIR=$(xcodebuild -project TrollDebs.xcodeproj -scheme TrollDebs -showBuildSettings 2>/dev/null | grep -m 1 "BUILD_DIR" | grep -oEi "\/.*" | xargs)
+        echo "BUILD_DIR=${BUILD_DIR}" >> $GITHUB_ENV
+        echo "BUILD_DIR=${BUILD_DIR}" >> $GITHUB_OUTPUT
+        echo "Found build directory: ${BUILD_DIR}"
 
     - name: Build with xcodebuild
       run: |
@@ -59,18 +69,27 @@ jobs:
           -project "${{ github.workspace }}/TrollDebs.xcodeproj" \
           -scheme TrollDebs \
           -configuration Release \
-          -destination 'platform=iOS Simulator,name=iPhone 15' \
+          -destination 'generic/platform=iOS' \
           clean build \
           CODE_SIGNING_ALLOWED=NO
 
+    - name: Find built app
+      run: |
+        find "${{ env.BUILD_DIR }}" -name "*.app" -type d -print
+        APP_PATH=$(find "${{ env.BUILD_DIR }}" -name "*.app" -type d -print -quit)
+        echo "APP_PATH=${APP_PATH}" >> $GITHUB_ENV
+        echo "Found app at: ${APP_PATH}"
+
     - name: Create .ipa file
+      if: env.APP_PATH != ''
       run: |
         mkdir -p Payload
-        cp -r "${{ github.workspace }}/build/Release-iphoneos/TrollDebs.app" Payload/
+        cp -r "${APP_PATH}" Payload/
         zip -r "${{ github.workspace }}/TrollDebs.ipa" Payload
         rm -rf Payload
 
     - name: Upload .ipa
+      if: env.APP_PATH != ''
       uses: actions/upload-artifact@v4
       with:
         name: TrollDebs.ipa
@@ -78,13 +97,15 @@ jobs:
         if-no-files-found: error
 
     - name: Create .deb package
+      if: env.APP_PATH != ''
       run: |
         mkdir -p "${{ github.workspace }}/DEBIAN"
         mkdir -p "${{ github.workspace }}/Applications"
-        cp -r "${{ github.workspace }}/build/Release-iphoneos/TrollDebs.app" "${{ github.workspace }}/Applications/"
+        cp -r "${APP_PATH}" "${{ github.workspace }}/Applications/TrollDebs.app"
         dpkg-deb --build "${{ github.workspace }}" "${{ github.workspace }}/TrollDebs.deb"
 
     - name: Upload .deb
+      if: env.APP_PATH != ''
       uses: actions/upload-artifact@v4
       with:
         name: TrollDebs.deb
