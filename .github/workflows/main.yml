@@ -52,6 +52,9 @@ jobs:
         find . -name "*.sh" -exec chmod +x {} \;
         find . -name "*.command" -exec chmod +x {} \;
 
+        # Copy entitlements to the right location
+        cp "${{ github.workspace }}/entitlements.plist" "${{ github.workspace }}/TrollDebs/"
+
         # Build the app with all necessary flags
         xcodebuild \
           -project "${{ github.workspace }}/TrollDebs.xcodeproj" \
@@ -62,8 +65,11 @@ jobs:
           CODE_SIGNING_ALLOWED=NO \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGN_IDENTITY="" \
-          CODE_SIGN_ENTITLEMENTS="" \
-          CODE_SIGNING_ENTITLEMENTS=""
+          CODE_SIGN_ENTITLEMENTS="TrollDebs/entitlements.plist" \
+          OTHER_CODE_SIGN_FLAGS="--generate-entitlement-der" \
+          PRODUCT_BUNDLE_IDENTIFIER="com.serena.trolldebs" \
+          DEVELOPMENT_TEAM="" \
+          PROVISIONING_PROFILE_SPECIFIER=""
 
         # Create Payload directory
         mkdir -p Payload
@@ -75,6 +81,9 @@ jobs:
         # Copy any additional resources
         cp -r "${{ github.workspace }}/Resources" Payload/TrollDebs.app/ || true
         cp -r "${{ github.workspace }}/Scripts" Payload/TrollDebs.app/ || true
+        
+        # Copy entitlements to the app bundle
+        cp "${{ github.workspace }}/entitlements.plist" "Payload/TrollDebs.app/"
 
         # Create .ipa
         cd Payload
